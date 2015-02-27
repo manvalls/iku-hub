@@ -156,6 +156,8 @@ function Room(server,rid,ps){
   this.walk(handlePeersFT,[this[peers]]);
 }
 
+Client.Room = Room;
+
 function* handlePeersFT(peers){
   var keys,i,j;
   
@@ -187,6 +189,19 @@ Object.defineProperties(Room.prototype,{
   
   send: {value: function(data){
     this.give('msg',data);
+  }},
+  
+  getPeers: {value: function(){
+    var result = [],
+        i,j,keys;
+    
+    keys = Object.keys(this[peers]);
+    for(j = 0;j < keys.length;j++){
+      i = keys[j];
+      result.push(this[peers]);
+    }
+    
+    return result;
   }}
   
 });
@@ -202,6 +217,8 @@ function Peer(server,rid,pid){
     pid: pid
   };
 }
+
+Client.Peer = Peer;
 
 Peer.prototype = new Emitter.Target();
 Peer.prototype.constructor = Peer;
