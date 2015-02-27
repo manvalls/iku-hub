@@ -41,36 +41,54 @@ function* onServerMsg(client,rooms,server){
   
   this.walk(onServerMsg,arguments);
   
-  if(msg.from && (room = rooms[msg.rid]) && (peer = room[peers][msg.from])){
-    peer[emitter].give('msg',msg.data);
-  }else{
-    if(msg.rid){
-      if(msg.peers){
-        room = new Room(this,msg.rid,msg.peers);
-        rooms[msg.rid] = room;
-        client[emitter].give('room',room);
-      }else if(msg.hi){
-        room = rooms[msg.rid];
-        peer = room[peers][msg.hi];
-        if(!peer){
-          peer = new Peer(this,msg.rid,msg.hi);
-          room[peers][msg.hi] = peer;
-          room[emitter].give('peer',peer);
-        }
-      }else if(msg.bye){
-        room = rooms[msg.rid];
-        peer = room[peers][msg.bye];
-        if(peer){
-          delete room[peers][msg.bye];
-          peer[emitter].set('closed');
-        }else{
-          room = rooms[msg.rid];
-          delete rooms[msg.rid];
-          closeAll(room);
-          room[emitter].set('closed');
-        }
+  if(msg.from){
+    room = rooms[msg.rid];
+    if(!room) return;
+    
+    peer = room[peers][msg.from];
+    if(!peer) return;
+    
+    if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
+  }else switch(msg.type){
+    
+    case 'room-hi':
+      room = new Room(this,msg.rid,msg.peers);
+      rooms[msg.rid] = room;
+      client[emitter].give('room',room);
+      break;
+      
+    case 'room-bye':
+      room = rooms[msg.rid];
+      if(!room) return;
+      delete rooms[msg.rid];
+      closeAll(room);
+      room[emitter].set('closed');
+      break;
+      
+    case 'hi':
+      room = rooms[msg.rid];
+      if(!room) return;
+      peer = room[peers][msg.pid];
+      if(!peer){
+        peer = new Peer(this,msg.rid,msg.pid);
+        room[peers][msg.pid] = peer;
+        room[emitter].give('peer',peer);
       }
-    }else server[emitter].give('msg',msg.data);
+      break;
+      
+    case 'bye':
+      room = rooms[msg.rid];
+      if(!room) return;
+      peer = room[peers][msg.pid];
+      if(!peer) return;
+      delete room[peers][msg.pid];
+      peer[emitter].set('closed');
+      break;
+    
+    case 'msg':
+      server[emitter].give('msg',msg.data);
+      break;
+    
   }
   
 }
@@ -110,7 +128,10 @@ Server.prototype.constructor = Server;
 Object.defineProperties(Server.prototype,{
   
   send: {value: function(data){
-    this[srv].give('msg',{data: data});
+    this[srv].give('msg',{
+      type: 'msg',
+      data: data
+    });
   }}
   
 });
@@ -149,6 +170,7 @@ Object.defineProperties(Room.prototype,{
   
   send: {value: function(data){
     this[srv].give('msg',{
+      type: 'msg',
       to: 'all',
       rid: this[id],
       data: data
@@ -176,6 +198,7 @@ Object.defineProperties(Peer.prototype,{
   
   send: {value: function(data){
     this[srv].give('msg',{
+      type: 'msg',
       to: this[id].pid,
       rid: this[id].rid,
       data: data

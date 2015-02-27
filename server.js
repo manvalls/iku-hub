@@ -48,13 +48,15 @@ Object.defineProperties(Room.prototype,{
     this[total]++;
     
     peer.give('msg',{
+      type: 'room-hi',
       rid: this[rid],
       peers: keys = Object.keys(this[peers])
     });
     
     msg = {
+      type: 'hi',
       rid: this[rid],
-      hi: pid
+      pid: pid
     };
     
     for(j = 0;j < keys.length;j++){
@@ -70,11 +72,21 @@ Object.defineProperties(Room.prototype,{
     var pid = p[pids][this[rid]],
         i,j,msg;
     
+    this[peers][pid].give('msg',{
+      type: 'room-bye',
+      rid: this[rid]
+    });
+    
+    delete p[pids][this[rid]];
+    delete p[rooms][this[rid]];
+    delete this[peers][pid];
+    
     keys = Object.keys(this[peers]);
     
     msg = {
+      type: 'bye',
       rid: this[rid],
-      bye: pid
+      pid: pid
     };
     
     for(j = 0;j < keys.length;j++){
@@ -82,16 +94,15 @@ Object.defineProperties(Room.prototype,{
       this[peers][i].give('msg',msg);
     }
     
-    delete p[pids][this[rid]];
-    delete p[rooms][this[rid]];
-    delete this[peers][pid];
-    
     if(!--this[total]) this[emitter].set('empty');
   }},
   
   send: {value: function(data){
     var keys = Object.keys(this[peers]),
-        msg = {data: data},
+        msg = {
+          type: 'msg',
+          data: data
+        },
         i,j;
     
     for(j = 0;j < keys.length;j++){
@@ -119,7 +130,10 @@ Peer.prototype.constructor = Peer;
 Object.defineProperties(Peer.prototype,{
   
   send: {value: function(data){
-    this[ip].give('msg',{data: data});
+    this[ip].give('msg',{
+      type: 'msg',
+      data: data
+    });
   }}
   
 });
@@ -171,7 +185,7 @@ function* handlePeer(server){
       
       if(!room[peers][msg.to]) continue;
       room[peers][msg.to].give('msg',msg);
-    }else externalPeer[emitter].give('msg',msg.data);
+    }else if(msg.type == 'msg') externalPeer[emitter].give('msg',msg.data);
   }
   
 }
