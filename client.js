@@ -6,6 +6,8 @@ var Su = require('u-su'),
     srv = Su(),
     id = Su(),
     
+    plugins = new Emitter(),
+    
     Client;
 
 // Client object
@@ -19,6 +21,8 @@ Client = module.exports = function Client(server){
   server.walk(onServerMsg,args);
   server.walk(onServerClose,args);
 };
+
+Client.plugins = plugins.target;
 
 function* onServerReady(client,rooms,server){
   yield this.until('ready');
@@ -49,6 +53,7 @@ function* onServerMsg(client,rooms,server){
     if(!peer) return;
     
     if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
+    else plugins.give(msg.type,[msg,peer[emitter]]);
   }else switch(msg.type){
     
     case 'room-hi':
@@ -168,13 +173,20 @@ Room.prototype.constructor = Room;
 
 Object.defineProperties(Room.prototype,{
   
+  give: {value: function(type,data){
+    type = type.slice(0,127);
+    
+    msg.to = 'all';
+    msg.rid = this[id];
+    
+    msg.type = type;
+    msg.data = data;
+    
+    this[srv].give('msg',msg);
+  }},
+  
   send: {value: function(data){
-    this[srv].give('msg',{
-      type: 'msg',
-      to: 'all',
-      rid: this[id],
-      data: data
-    });
+    this.give('msg',data);
   }}
   
 });
@@ -196,15 +208,21 @@ Peer.prototype.constructor = Peer;
 
 Object.defineProperties(Peer.prototype,{
   
+  give: {value: function(type,data){
+    type = type.slice(0,127);
+    
+    msg.to = this[id].pid;
+    msg.rid = this[id].rid;
+    
+    msg.type = type;
+    msg.data = data;
+    
+    this[srv].give('msg',msg);
+  }},
+  
   send: {value: function(data){
-    this[srv].give('msg',{
-      type: 'msg',
-      to: this[id].pid,
-      rid: this[id].rid,
-      data: data
-    });
+    this.give('msg',data);
   }}
   
 });
-
 
