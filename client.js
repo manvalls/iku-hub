@@ -53,7 +53,7 @@ function* onServerMsg(client,rooms,server){
     if(!peer) return;
     
     if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
-    else plugins.give(msg.type,[msg,peer[emitter]]);
+    else plugins.give(msg.type,[msg.data,peer[emitter]]);
   }else switch(msg.type){
     
     case 'room-hi':
@@ -178,13 +178,13 @@ Object.defineProperties(Room.prototype,{
   give: {value: function(type,data){
     type = type.slice(0,127);
     
-    msg.to = 'all';
-    msg.rid = this[id];
-    
-    msg.type = type;
-    msg.data = data;
-    
-    this[srv].give('msg',msg);
+    this[srv].give('msg',{
+      to: 'all',
+      rid: this[id],
+      
+      type: type,
+      data: data
+    });
   }},
   
   send: {value: function(data){
@@ -228,13 +228,13 @@ Object.defineProperties(Peer.prototype,{
   give: {value: function(type,data){
     type = type.slice(0,127);
     
-    msg.to = this[id].pid;
-    msg.rid = this[id].rid;
-    
-    msg.type = type;
-    msg.data = data;
-    
-    this[srv].give('msg',msg);
+    this[srv].give('msg',{
+      to: this[id].pid,
+      rid: this[id].rid,
+      
+      type: type,
+      data: data
+    });
   }},
   
   send: {value: function(data){
@@ -243,3 +243,6 @@ Object.defineProperties(Peer.prototype,{
   
 });
 
+// Plugins
+
+require('./client/plugins/rtc-stream');
