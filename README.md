@@ -37,15 +37,13 @@ hub.walk(function*(){
     var peer = yield this.until('peer');
     
     this.walk(cb);
-    
     peer.send('hi');
     
     peer.walk(function* cb(){
       var msg = yield this.until('msg');
       
       this.walk(cb);
-      
-      console.log('got',msg);
+      console.log(msg); // hi
     });
     
   });
