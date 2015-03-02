@@ -1,6 +1,8 @@
 var Su = require('u-su'),
     Emitter = require('y-emitter'),
     
+    rtc,
+    
     emitter = Su(),
     peers = Su(),
     srv = Su(),
@@ -245,4 +247,5 @@ Object.defineProperties(Peer.prototype,{
 
 // Plugins
 
-require('./client/plugins/rtc-stream');
+rtc = require('./client/plugins/rtc.js');
+if(rtc.Pc) require('./client/plugins/rtc-stream.js');
