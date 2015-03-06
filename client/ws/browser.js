@@ -49,6 +49,11 @@ function* sendMsg(ws){
 }
 
 module.exports = function(url){
+  
+  if(!url.match(/^wss?:/)){
+    url = document.baseURI.replace(/^http/,'ws') + url;
+  }
+  
   return new Client(getPeer(url));
 };
 
