@@ -107,6 +107,7 @@ function* onServerClosed(client,rooms,server){
   yield this.until('closed');
   
   client[emitter].unset('server');
+  client[emitter].set('closed');
   server[emitter].set('closed');
   
   keys = Object.keys(rooms);
