@@ -18,17 +18,18 @@ Client = module.exports = function Client(server){
   var args = [this,{},new Server(server)];
   
   Emitter.Target.call(this,emitter);
+  this[srv] = server;
   
   server.walk(onServerReady,args);
   server.walk(onServerMsg,args);
-  server.walk(onServerClose,args);
+  server.walk(onServerClosed,args);
 };
 
 Client.plugins = plugins.target;
 
 function* onServerReady(client,rooms,server){
   yield this.until('ready');
-  client[emitter].give('server',server);
+  client[emitter].set('server',server);
 }
 
 function closeAll(room){
@@ -100,10 +101,12 @@ function* onServerMsg(client,rooms,server){
   
 }
 
-function* onServerClose(client,rooms,server){
+function* onServerClosed(client,rooms,server){
   var keys,i,j,rs = [];
   
-  yield this.until('close');
+  yield this.until('closed');
+  
+  client[emitter].unset('server');
   server[emitter].set('closed');
   
   keys = Object.keys(rooms);
@@ -117,10 +120,19 @@ function* onServerClose(client,rooms,server){
     rs[i][emitter].set('closed');
     closeAll(rs[i]);
   }
+  
 }
 
 Client.prototype = new Emitter.Target();
 Client.prototype.constructor = Client;
+
+Object.defineProperties(Client.prototype,{
+  
+  close: {value: function(){
+    this[srv].set('closed');
+  }}
+  
+});
 
 // Server object
 

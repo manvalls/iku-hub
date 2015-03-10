@@ -134,6 +134,10 @@ Object.defineProperties(Peer.prototype,{
       type: 'msg',
       data: data
     });
+  }},
+  
+  close: {value: function(){
+    this[ip].set('closed');
   }}
   
 });

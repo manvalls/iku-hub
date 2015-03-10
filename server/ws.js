@@ -1,8 +1,8 @@
 var ws = require('ws'),
     Emitter = require('y-emitter'),
     
-    walk = require('u-proto/walk'),
-    until = require('u-proto/until'),
+    on = require('u-proto/on'),
+    once = require('u-proto/once'),
     
     Server = require('../server.js');
 
@@ -19,43 +19,42 @@ function getPeerMachine(server,path){
     path: path
   });
   
-  wss[walk](onConnection,[emitter]);
+  wss[on]('connection',onConnection,emitter);
   
   return emitter.target;
 }
 
-function* onConnection(emitter){
-  var ws = (yield this[until]('connection'))[0],
+function onConnection(e,en,emitter){
+  var ws = e[0],
       inP,outP;
-  
-  this[walk](onConnection,arguments);
   
   inP = new Emitter.Hybrid();
   outP = new Emitter.Hybrid();
   Emitter.chain(inP,outP);
   
-  inP.walk(sendMsg,[ws]);
-  ws[walk](onMsg,[inP]);
-  ws[walk](onClose,[inP]);
+  inP.on('msg',sendMsg,ws);
+  inP.once('closed',close,ws);
+  
+  ws[on]('message',onMsg,inP);
+  ws[once]('close',onceClose,inP);
   
   inP.set('ready');
-  
   emitter.give('peer',outP);
 }
 
-function* sendMsg(ws){
-  var msg = yield this.until('msg');
-  
-  this[walk](sendMsg,arguments);
-  
+function sendMsg(msg,en,ws){
   try{ ws.send(JSON.stringify(msg)); }
   catch(e){ }
 }
 
-function* onMsg(inP){
-  var msg = (yield this[until]('message'))[0];
-  
-  this[walk](onMsg,arguments);
+function close(e,en,ws){
+  ws.close();
+  inP.unset('ready');
+  inP.set('closed');
+}
+
+function onMsg(e,en,inP){
+  var msg = e[0];
   
   try{ msg = JSON.parse(msg); }
   catch(e){ return; }
@@ -63,9 +62,7 @@ function* onMsg(inP){
   inP.give('msg',msg);
 }
 
-function* onClose(inP){
-  yield this[until]('close');
-  
+function onceClose(e,en,inP){
   inP.unset('ready');
   inP.set('closed');
 }

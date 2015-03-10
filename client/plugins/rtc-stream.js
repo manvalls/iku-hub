@@ -31,6 +31,11 @@ function* handleIce(peer,sid){
   
 }
 
+function* closePc(pc){
+  yield this.until('closed');
+  pc.close();
+}
+
 Object.defineProperty(Client.Peer.prototype,'sendStream',{value: wrap(function*(stream,opts){
   var pc = new rtc.Pc(opts || rtc.PcOpts),
       sid = unique(),
@@ -83,6 +88,7 @@ Client.plugins.walk(function* cb(){
       
       pc = peer[streams][msg.sid] = new rtc.Pc(msg.opt || rtc.PcOpts);
       pc[walk](handleIce,[peer,msg.sid]);
+      emitter.target.walk(closePc,[pc]);
       
       e = yield pc[until]('addstream');
       emitter.give('stream',e.stream);
