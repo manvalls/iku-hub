@@ -1,6 +1,6 @@
 {
   "name": "iku-hub",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Room oriented hub",
   "main": "main.js",
   "dependencies": {
