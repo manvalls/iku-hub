@@ -1,19 +1,9 @@
-var pair = require('y-callback/pair');
+var pair = require('y-callback/pair'),
+    prefix = require('u-proto/prefix');
 
-exports.Pc=
-global.RTCPeerConnection ||
-global.mozRTCPeerConnection ||
-global.webkitRTCPeerConnection;
-
-exports.Ice=
-global.RTCIceCandidate ||
-global.mozRTCIceCandidate ||
-global.webkitRTCIceCandidate;
-
-exports.Sd=
-global.RTCSessionDescription ||
-global.mozRTCSessionDescription ||
-global.webkitRTCSessionDescription;
+exports.Pc = global[prefix]('RTCPeerConnection');
+exports.Ice = global[prefix]('RTCIceCandidate');
+exports.Sd = global[prefix]('RTCSessionDescription');
 
 exports.PcOpts=
 {
