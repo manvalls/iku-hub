@@ -260,5 +260,5 @@ Object.defineProperties(Peer.prototype,{
 
 // Plugins
 
-rtc = require('./client/plugins/rtc.js');
-if(rtc.Pc) require('./client/plugins/rtc-stream.js');
+rtc = require('./client/rtc.js');
+if(rtc.Pc) require('./client/rtc-stream.js');

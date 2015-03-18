@@ -5,7 +5,7 @@ var Su = require('u-su'),
     walk = require('u-proto/walk'),
     until = require('u-proto/until'),
     
-    Client = require('../../client.js'),
+    Client = require('../client.js'),
     rtc = require('./rtc.js'),
     
     streams = Su();
