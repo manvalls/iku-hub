@@ -23,17 +23,24 @@ function Room(){
   this[total] = 0;
 }
 
+function broadcast(room,msg,pid){
+  var keys,i,j;
+  
+  keys = Object.keys(room[peers]);
+  
+  for(j = 0;j < keys.length;j++){
+    i = keys[j];
+    if(i !== pid) room[peers][i].give('msg',msg);
+  }
+  
+}
+
 Room.prototype = new Emitter.Target();
 Room.prototype.constructor = Room;
 
-function* handleClose(room,p){
-  yield this.until('closed');
-  room.remove(p);
-}
-
 Object.defineProperties(Room.prototype,{
   
-  add: {value: wrap(function*(p){
+  add: {value: function(p){
     var pid,peer,msg,i,j,keys;
     
     if(p[pids][this[rid]]) return;
@@ -65,14 +72,14 @@ Object.defineProperties(Room.prototype,{
     }
     
     this[peers][pid] = peer;
-    peer.walk(handleClose,[this,p]);
-  })},
+    peer.once('closed',room_onceClosed,this,p);
+  }},
   
-  remove: {value: function(p){
+  remove: {value: function(p,dontNotify){
     var pid = p[pids][this[rid]],
-        i,j,msg;
+        keys,i,j,msg;
     
-    this[peers][pid].give('msg',{
+    if(!this[peers][pid].is('closed')) this[peers][pid].give('msg',{
       type: 'room-bye',
       rid: this[rid]
     });
@@ -98,21 +105,19 @@ Object.defineProperties(Room.prototype,{
   }},
   
   send: {value: function(data){
-    var keys = Object.keys(this[peers]),
-        msg = {
-          type: 'msg',
-          data: data
-        },
-        i,j;
     
-    for(j = 0;j < keys.length;j++){
-      i = keys[j];
-      this[peers][i].give('msg',msg);
-    }
+    broadcast(this,{
+      type: 'msg',
+      data: data
+    });
     
   }}
   
 });
+
+function room_onceClosed(e,cbc,room,p){
+  room.remove(p);
+}
 
 // External Peer object
 
@@ -130,10 +135,12 @@ Peer.prototype.constructor = Peer;
 Object.defineProperties(Peer.prototype,{
   
   send: {value: function(data){
+    
     this[ip].give('msg',{
       type: 'msg',
       data: data
     });
+    
   }},
   
   close: {value: function(){
@@ -146,7 +153,7 @@ Object.defineProperties(Peer.prototype,{
 
 Server = module.exports = function Server(peerMachine){
   Emitter.Target.call(this,emitter);
-  this.walk(squeeze,[peerMachine]);
+  peerMachine.on('peer',onPeer,this);
 };
 
 Server.Room = Room;
@@ -154,48 +161,37 @@ Server.Room = Room;
 Server.prototype = new Emitter.Target();
 Server.prototype.constructor = Server;
 
-function* squeeze(pm){
-  while(true) (yield pm.until('peer')).walk(handlePeer,[this]);
-};
-
-function* handlePeer(server){
-  var externalPeer = new Peer(this),
-      msg,room,pid,keys;
+function onPeer(peer,cbc,server){
+  var externalPeer = new Peer(peer);
   
   server[emitter].give('client',externalPeer);
-  this.walk(spHandleClose,[externalPeer]);
   
-  while(true){
-    msg = yield this.until('msg');
+  peer.once('closed',onceClosed,externalPeer);
+  peer.on('msg',onMsg,externalPeer);
+}
+
+function onMsg(msg,cbc,ep){
+  var room;
+  
+  if(!msg) return;
+  
+  if(msg.rid){
+    room = ep[rooms][msg.rid];
+    if(!room) return;
     
-    if(!msg) continue;
+    msg.from = ep[pids][msg.rid];
     
-    if(msg.rid){
-      room = externalPeer[rooms][msg.rid];
-      if(!room) continue;
-      
-      msg.from = externalPeer[pids][msg.rid];
-      
-      if(msg.to == 'all'){
-        keys = Object.keys(room[peers]);
-        
-        for(j = 0;j < keys.length;j++){
-          i = keys[j];
-          if(i != pid) room[peers][i].give('msg',msg);
-        }
-        
-        continue;
-      }
-      
-      if(!room[peers][msg.to]) continue;
-      room[peers][msg.to].give('msg',msg);
-    }else if(msg.type == 'msg') externalPeer[emitter].give('msg',msg.data);
-  }
+    if(msg.to == 'all') return broadcast(room,msg,msg.from);
+    
+    if(!room[peers][msg.to]) return;
+    room[peers][msg.to].give('msg',msg);
+    
+  }else if(msg.type == 'msg') ep[emitter].give('msg',msg.data);
   
 }
 
-function* spHandleClose(ep){
-  yield this.until('closed');
+function onceClosed(e,cbc,ep){
   ep[emitter].set('closed');
 }
+
 

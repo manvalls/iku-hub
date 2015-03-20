@@ -5,11 +5,13 @@
 ### Server
 
 ```javascript
-var Server = require('iku-hub/server/ws'),
-    Room = require('iku-hub/server').Room,
+var Server = require('iku-hub/server'),
+    WsPm = require('i-pm/ws'),
+    
+    Room = Server.Room,
     server = require('http').createServer().listen(8080),
     
-    hub = new Server(server,'.hub'),
+    hub = new Server(WsPm(server,'.hub')),
     room = new Room();
 
 hub.walk(function*(){
@@ -27,8 +29,10 @@ hub.walk(function*(){
 ### Client
 
 ```javascript
-var Client = require('iku-hub/client/ws'),
-    hub = new Client('ws://localhost:8080/.hub/');
+var Client = require('iku-hub/client'),
+    WsP = require('i-peer/ws'),
+    
+    hub = new Client(WsP('ws://localhost:8080/.hub/'));
 
 hub.walk(function*(){
   var room = yield this.until('room');

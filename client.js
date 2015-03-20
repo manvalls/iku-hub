@@ -15,20 +15,20 @@ var Su = require('u-su'),
 // Client object
 
 Client = module.exports = function Client(server){
-  var args = [this,{},new Server(server)];
+  var rooms = {},
+      s = new Server(server);
   
   Emitter.Target.call(this,emitter);
   this[srv] = server;
   
-  server.walk(onServerReady,args);
-  server.walk(onServerMsg,args);
-  server.walk(onServerClosed,args);
+  server.once('ready',onceServerReady,this,s);
+  server.on('msg',onServerMsg,this,rooms,s);
+  server.once('closed',onceServerClosed,this,rooms,s);
 };
 
 Client.plugins = plugins.target;
 
-function* onServerReady(client,rooms,server){
-  yield this.until('ready');
+function onceServerReady(e,cbc,client,server){
   client[emitter].set('server',server);
 }
 
@@ -40,13 +40,11 @@ function closeAll(room){
     i = keys[j];
     room[peers][i][emitter].set('closed');
   }
+  
 }
 
-function* onServerMsg(client,rooms,server){
-  var msg = yield this.until('msg'),
-      room,peer;
-  
-  this.walk(onServerMsg,arguments);
+function onServerMsg(msg,cbc,client,rooms,server){
+  var room,peer;
   
   if(msg.from){
     room = rooms[msg.rid];
@@ -101,10 +99,8 @@ function* onServerMsg(client,rooms,server){
   
 }
 
-function* onServerClosed(client,rooms,server){
+function onceServerClosed(e,cbc,client,rooms,server){
   var keys,i,j,rs = [];
-  
-  yield this.until('closed');
   
   client[emitter].unset('server');
   client[emitter].set('closed');
@@ -118,8 +114,8 @@ function* onServerClosed(client,rooms,server){
   }
   
   for(i = 0;i < rs.length;i++){
-    rs[i][emitter].set('closed');
     closeAll(rs[i]);
+    rs[i][emitter].set('closed');
   }
   
 }
@@ -168,15 +164,13 @@ function Room(server,rid,ps){
   this[peers] = {};
   
   for(i = 0;i < ps.length;i++) this[peers][ps[i]] = new Peer(server,rid,ps[i]);
-  this.walk(handlePeersFT,[this[peers]]);
+  this.once('peer listened',oncePeerListened,this[peers]);
 }
 
 Client.Room = Room;
 
-function* handlePeersFT(peers){
+function oncePeerListened(e,c,peers){
   var keys,i,j;
-  
-  yield this.until('peer listened');
   
   keys = Object.keys(peers);
   for(j = 0;j < keys.length;j++){
