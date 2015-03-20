@@ -55,15 +55,15 @@ Object.defineProperties(Room.prototype,{
     this[total]++;
     
     peer.give('msg',{
-      type: 'room-hi',
+      type: 'hi',
       rid: this[rid],
-      peers: keys = Object.keys(this[peers])
+      pids: keys = Object.keys(this[peers])
     });
     
     msg = {
       type: 'hi',
       rid: this[rid],
-      pid: pid
+      pids: [pid]
     };
     
     for(j = 0;j < keys.length;j++){
@@ -80,8 +80,9 @@ Object.defineProperties(Room.prototype,{
         keys,i,j,msg;
     
     if(!this[peers][pid].is('closed')) this[peers][pid].give('msg',{
-      type: 'room-bye',
-      rid: this[rid]
+      type: 'bye',
+      rid: this[rid],
+      pids: []
     });
     
     delete p[pids][this[rid]];
@@ -93,7 +94,7 @@ Object.defineProperties(Room.prototype,{
     msg = {
       type: 'bye',
       rid: this[rid],
-      pid: pid
+      pids: [pid]
     };
     
     for(j = 0;j < keys.length;j++){

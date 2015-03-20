@@ -44,7 +44,7 @@ function closeAll(room){
 }
 
 function onServerMsg(msg,cbc,client,rooms,server){
-  var room,peer;
+  var room,peer,i,pid;
   
   if(msg.from){
     room = rooms[msg.rid];
@@ -56,39 +56,52 @@ function onServerMsg(msg,cbc,client,rooms,server){
     if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
     else plugins.give(msg.type,[msg.data,peer[emitter]]);
   }else switch(msg.type){
-    
-    case 'room-hi':
-      room = new Room(this,msg.rid,msg.peers);
-      rooms[msg.rid] = room;
-      client[emitter].give('room',room);
-      break;
-      
-    case 'room-bye':
-      room = rooms[msg.rid];
-      if(!room) return;
-      delete rooms[msg.rid];
-      closeAll(room);
-      room[emitter].set('closed');
-      break;
       
     case 'hi':
       room = rooms[msg.rid];
-      if(!room) return;
-      peer = room[peers][msg.pid];
-      if(!peer){
-        peer = new Peer(this,msg.rid,msg.pid);
-        room[peers][msg.pid] = peer;
-        room[emitter].give('peer',peer);
+      if(!room){
+        room = new Room(this,msg.rid,msg.pids);
+        rooms[msg.rid] = room;
+        client[emitter].give('room',room);
+        return;
       }
+      
+      for(i = 0;i < msg.pids.length;i++){
+        pid = msg.pids[i];
+        
+        peer = room[peers][pid];
+        if(!peer){
+          peer = new Peer(this,msg.rid,pid);
+          room[peers][pid] = peer;
+          room[emitter].give('peer',peer);
+        }
+      }
+      
       break;
       
     case 'bye':
+      
       room = rooms[msg.rid];
       if(!room) return;
-      peer = room[peers][msg.pid];
-      if(!peer) return;
-      delete room[peers][msg.pid];
-      peer[emitter].set('closed');
+      
+      if(!msg.pids.length){
+        delete rooms[msg.rid];
+        
+        closeAll(room);
+        room[emitter].set('closed');
+        return;
+      }
+      
+      for(i = 0;i < msg.pids.length;i++){
+        pid = msg.pids[i];
+        
+        peer = room[peers][pid];
+        if(!peer) return;
+        
+        delete room[peers][pid];
+        peer[emitter].set('closed');
+      }
+      
       break;
     
     case 'msg':
