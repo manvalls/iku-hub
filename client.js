@@ -115,10 +115,6 @@ function onServerMsg(msg,cbc,client,rooms,server){
 function onceServerClosed(e,cbc,client,rooms,server){
   var keys,i,j,rs = [];
   
-  client[emitter].unset('server');
-  client[emitter].set('closed');
-  server[emitter].set('closed');
-  
   keys = Object.keys(rooms);
   for(j = 0;j < keys.length;j++){
     i = keys[j];
@@ -131,6 +127,9 @@ function onceServerClosed(e,cbc,client,rooms,server){
     rs[i][emitter].set('closed');
   }
   
+  client[emitter].unset('server');
+  server[emitter].set('closed');
+  client[emitter].set('closed');
 }
 
 Client.prototype = new Emitter.Target();
