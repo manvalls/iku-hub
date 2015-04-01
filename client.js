@@ -176,18 +176,18 @@ function Room(server,rid,ps){
   this[peers] = {};
   
   for(i = 0;i < ps.length;i++) this[peers][ps[i]] = new Peer(server,rid,ps[i]);
-  this.once('peer listened',oncePeerListened,this[peers]);
+  this.until('peer').listeners.change().listen(oncePeerListened,[this[peers],this]);
 }
 
 Client.Room = Room;
 
-function oncePeerListened(e,c,peers){
+function oncePeerListened(peers,room){
   var keys,i,j;
   
   keys = Object.keys(peers);
   for(j = 0;j < keys.length;j++){
     i = keys[j];
-    this[emitter].give('peer',peers[i]);
+    room[emitter].give('peer',peers[i]);
   }
 }
 
