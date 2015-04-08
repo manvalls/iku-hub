@@ -8,6 +8,8 @@ var Su = require('u-su'),
     srv = Su(),
     id = Su(),
     
+    peerPlugins = new Emitter(),
+    serverPlugins = new Emitter(),
     plugins = new Emitter(),
     
     Client;
@@ -24,9 +26,13 @@ Client = module.exports = function Client(server){
   server.once('ready',onceServerReady,this,s);
   server.on('msg',onServerMsg,this,rooms,s);
   server.once('closed',onceServerClosed,this,rooms,s);
+  
+  plugins.give('client',this);
 };
 
 Client.plugins = plugins.target;
+Client.peerPlugins = peerPlugins.target;
+Client.serverPlugins = serverPlugins.target;
 
 function onceServerReady(e,cbc,client,server){
   client[emitter].set('server',server);
@@ -54,8 +60,8 @@ function onServerMsg(msg,cbc,client,rooms,server){
     if(!peer) return;
     
     if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
-    else plugins.give(msg.type,[msg.data,peer[emitter]]);
-  }else switch(msg.type){
+    else peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
+  }else if(msg.rid) switch(msg.type){
       
     case 'hi':
       room = rooms[msg.rid];
@@ -104,10 +110,9 @@ function onServerMsg(msg,cbc,client,rooms,server){
       
       break;
     
-    case 'msg':
-      server[emitter].give('msg',msg.data);
-      break;
-    
+  }else{
+    if(msg.type == 'msg') server[emitter].give('msg',msg.data);
+    else serverPlugins.give(msg.type,[msg.data,serverPlugins]);
   }
   
 }
@@ -148,6 +153,8 @@ Object.defineProperties(Client.prototype,{
 function Server(server){
   Emitter.Target.call(this,emitter);
   this[srv] = server;
+  
+  plugins.give('server',this);
 }
 
 Server.prototype = new Emitter.Target();
@@ -155,11 +162,21 @@ Server.prototype.constructor = Server;
 
 Object.defineProperties(Server.prototype,{
   
-  send: {value: function(data){
+  give: {value: function(type,data){
+    
     this[srv].give('msg',{
-      type: 'msg',
+      type: type,
       data: data
     });
+    
+  }},
+  
+  send: {value: function(data){
+    this.give('msg',data);
+  }},
+  
+  close: {value: function(){
+    this[srv].set('closed');
   }}
   
 });
@@ -176,18 +193,20 @@ function Room(server,rid,ps){
   this[peers] = {};
   
   for(i = 0;i < ps.length;i++) this[peers][ps[i]] = new Peer(server,rid,ps[i]);
-  this.until('peer').listeners.change().listen(oncePeerListened,[this[peers],this]);
+  this.until('peer').listeners.change().listen(oncePeerListened,[this]);
+  
+  plugins.give('room',this);
 }
 
 Client.Room = Room;
 
-function oncePeerListened(peers,room){
+function oncePeerListened(room){
   var keys,i,j;
   
-  keys = Object.keys(peers);
+  keys = Object.keys(room[peers]);
   for(j = 0;j < keys.length;j++){
     i = keys[j];
-    room[emitter].give('peer',peers[i]);
+    room[emitter].give('peer',room[peers][i]);
   }
 }
 
@@ -237,6 +256,8 @@ function Peer(server,rid,pid){
     rid: rid,
     pid: pid
   };
+  
+  plugins.give('peer',this);
 }
 
 Client.Peer = Peer;

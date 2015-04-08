@@ -11,6 +11,9 @@ var Su = require('u-su'),
     ip = Su(),
     rooms = Su(),
     
+    plugins = new Emitter(),
+    serverPlugins = new Emitter(),
+    
     Server;
 
 // Room object
@@ -21,16 +24,29 @@ function Room(){
   this[rid] = unique();
   this[peers] = {};
   this[total] = 0;
+  
+  plugins.give('room',this);
 }
 
 function broadcast(room,msg,pid){
   var keys,i,j;
   
-  keys = Object.keys(room[peers]);
-  
-  for(j = 0;j < keys.length;j++){
-    i = keys[j];
-    if(i !== pid) room[peers][i].give('msg',msg);
+  if(typeof pid == 'string'){
+    
+    keys = Object.keys(room[peers]);
+    for(j = 0;j < keys.length;j++){
+      i = keys[j];
+      if(i !== pid) room[peers][i].give('msg',msg);
+    }
+    
+  }else{
+    
+    keys = pid || Object.keys(room[peers]);
+    for(j = 0;j < keys.length;j++){
+      i = keys[j];
+      room[peers][i].give('msg',msg);
+    }
+    
   }
   
 }
@@ -60,22 +76,18 @@ Object.defineProperties(Room.prototype,{
       pids: keys = Object.keys(this[peers])
     });
     
-    msg = {
+    this[peers][pid] = peer;
+    peer.once('closed',room_onceClosed,this,p);
+    
+    broadcast(this,{
       type: 'hi',
       rid: this[rid],
       pids: [pid]
-    };
+    },keys);
     
-    for(j = 0;j < keys.length;j++){
-      i = keys[j];
-      this[peers][i].give('msg',msg);
-    }
-    
-    this[peers][pid] = peer;
-    peer.once('closed',room_onceClosed,this,p);
   }},
   
-  remove: {value: function(p,dontNotify){
+  remove: {value: function(p){
     var pid = p[pids][this[rid]],
         keys,i,j,msg;
     
@@ -89,29 +101,26 @@ Object.defineProperties(Room.prototype,{
     delete p[rooms][this[rid]];
     delete this[peers][pid];
     
-    keys = Object.keys(this[peers]);
-    
-    msg = {
+    broadcast(this,{
       type: 'bye',
       rid: this[rid],
       pids: [pid]
-    };
-    
-    for(j = 0;j < keys.length;j++){
-      i = keys[j];
-      this[peers][i].give('msg',msg);
-    }
+    });
     
     if(!--this[total]) this[emitter].set('empty');
   }},
   
-  send: {value: function(data){
+  give: {value: function(type,data){
     
     broadcast(this,{
-      type: 'msg',
+      type: type,
       data: data
     });
     
+  }},
+  
+  send: {value: function(data){
+    this.give('msg',data);
   }}
   
 });
@@ -128,6 +137,8 @@ function Peer(internalPeer){
   this[rooms] = {};
   this[pids] = {};
   this[ip] = internalPeer;
+  
+  plugins.give('peer',this);
 }
 
 Peer.prototype = new Emitter.Target();
@@ -135,13 +146,17 @@ Peer.prototype.constructor = Peer;
 
 Object.defineProperties(Peer.prototype,{
   
-  send: {value: function(data){
+  give: {value: function(type,data){
     
     this[ip].give('msg',{
-      type: 'msg',
+      type: type,
       data: data
     });
     
+  }},
+  
+  send: {value: function(data){
+    this.give('msg',data);
   }},
   
   close: {value: function(){
@@ -155,9 +170,15 @@ Object.defineProperties(Peer.prototype,{
 Server = module.exports = function Server(peerMachine){
   Emitter.Target.call(this,emitter);
   peerMachine.on('peer',onPeer,this);
+  
+  plugins.give('server',this);
 };
 
+Server.Peer = Peer;
 Server.Room = Room;
+
+Server.serverPlugins = serverPlugins.target;
+Server.plugins = plugins.target;
 
 Server.prototype = new Emitter.Target();
 Server.prototype.constructor = Server;
@@ -188,6 +209,7 @@ function onMsg(msg,cbc,ep){
     room[peers][msg.to].give('msg',msg);
     
   }else if(msg.type == 'msg') ep[emitter].give('msg',msg.data);
+  else serverPlugins.give(msg.type,[msg.data,ep[emitter]]);
   
 }
 

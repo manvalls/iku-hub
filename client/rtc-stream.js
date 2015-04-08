@@ -8,6 +8,8 @@ var Su = require('u-su'),
     Client = require('../client.js'),
     rtc = require('./rtc.js'),
     
+    event = '3M9E3T-F9qsz',
+    
     streams = Su();
 
 function* handleIce(peer,sid){
@@ -23,7 +25,7 @@ function* handleIce(peer,sid){
     sdpMLineIndex: e.candidate.sdpMLineIndex
   };
   
-  peer.give('rtc-stream',{
+  peer.give(event,{
     type: 'ice',
     sid: sid,
     ice: ice
@@ -41,7 +43,7 @@ Object.defineProperty(Client.Peer.prototype,'sendStream',{value: wrap(function*(
       sid = unique(),
       offer,msg;
   
-  this.give('rtc-stream',{
+  this.give(event,{
     type: 'new',
     opt: opts,
     sid: sid
@@ -61,7 +63,7 @@ Object.defineProperty(Client.Peer.prototype,'sendStream',{value: wrap(function*(
     sdp: offer.sdp
   };
   
-  this.give('rtc-stream',{
+  this.give(event,{
     type: 'offer',
     sid: sid,
     offer: msg
@@ -69,10 +71,10 @@ Object.defineProperty(Client.Peer.prototype,'sendStream',{value: wrap(function*(
   
 })});
 
-Client.plugins.walk(function* cb(){
+Client.peerPlugins.walk(function* cb(){
   var args,msg,peer,emitter,pc,e,answer;
   
-  args = yield this.until('rtc-stream');
+  args = yield this.until(event);
   this.walk(cb);
   
   msg = args[0];
@@ -109,7 +111,7 @@ Client.plugins.walk(function* cb(){
       answer = yield rtc.answer(pc);
       yield rtc.local(pc,answer);
       
-      peer.give('rtc-stream',{
+      peer.give(event,{
         type: 'answer',
         sid: msg.sid,
         answer: {
