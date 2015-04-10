@@ -100,14 +100,15 @@ function send(msg,room){
     
     if(msg.route[rp[rid]]){
       delete room[remotePeers][msg.to];
-      findOrDelete([msg.to],room);
+      delete msg.route[room[rid]];
+      findOrDelete([msg.to],room,msg);
     }else rp.give('msg',msg);
     
   }
   
 }
 
-function findOrDelete(pids,room,peer){
+function findOrDelete(pids,room,pm,peer){
   var toDelete = [],
       keys,i,j,rp,k,pid,msg;
   
@@ -125,10 +126,9 @@ function findOrDelete(pids,room,peer){
       if(rp[peers][pid]){
         room[remotePeers][pid] = rp;
         
-        send({
-          test: true,
-          to: pid
-        },room);
+        pm = pm || {test: true};
+        pm.to = pid;
+        send(pm,room);
         
         continue;
       }
@@ -229,7 +229,7 @@ function roomOnPeerMsg(msg,c,room,id){
         }
       }
       
-      findOrDelete(pids,room,this);
+      findOrDelete(pids,room,null,this);
       
       break;
     
