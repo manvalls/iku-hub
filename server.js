@@ -37,12 +37,22 @@ function Room(pm){
 // Room utils
 
 function broadcast(room,msg,pid){
-  var keys,i,j,peer;
+  var keys,i,j;
   
-  if(msg[room[rid]]) return;
-  msg[room[rid]] = true;
+  msg.route = msg.route || {};
   
-  if(typeof pid == 'string'){
+  if(msg.route[room[rid]]) return;
+  msg.route[room[rid]] = true;
+  
+  keys = Object.keys(room[roomPeers]);
+  for(j = 0;j < keys.length;j++){
+    i = keys[j];
+    if(!msg.route[room[roomPeers][i][rid]]) room[roomPeers][i].give('msg',msg);
+  }
+  
+  delete msg.route;
+  
+  if(pid){
     
     keys = Object.keys(room[peers]);
     for(j = 0;j < keys.length;j++){
@@ -50,34 +60,12 @@ function broadcast(room,msg,pid){
       if(i !== pid) room[peers][i].give('msg',msg);
     }
     
-    pid = null;
-    
   }else{
     
     keys = Object.keys(room[peers]);
     for(j = 0;j < keys.length;j++){
       i = keys[j];
       room[peers][i].give('msg',msg);
-    }
-    
-  }
-  
-  peer = pid;
-  
-  if(peer){
-    
-    keys = Object.keys(room[roomPeers]);
-    for(j = 0;j < keys.length;j++){
-      i = keys[j];
-      if(room[roomPeers][i] != peer) room[roomPeers][i].give('msg',msg);
-    }
-    
-  }else{
-    
-    keys = Object.keys(room[roomPeers]);
-    for(j = 0;j < keys.length;j++){
-      i = keys[j];
-      room[roomPeers][i].give('msg',msg);
     }
     
   }
@@ -94,35 +82,74 @@ function getPeerList(room){
 }
 
 function send(msg,room){
-  if(room[peers][msg.to]) room[peers][msg.to].give('msg',msg);
-  else if(room[remotePeers][msg.to]) room[remotePeers][msg.to].give('msg',msg);
-}
-
-function findOrDelete(pid,room,peer){
-  var keys,i,j,rp;
+  var rp;
   
-  // TODO: multiple pids support
+  msg.route = msg.route || {};
   
-  if(room[remotePeers][pid]) return;
+  if(msg.route[room[rid]]) return;
+  msg.route[room[rid]] = true;
   
-  keys = Object.keys(room[roomPeers]);
-  for(j = 0;j < keys.length;j++){
-    i = keys[j];
-    rp = room[roomPeers][i];
+  if(room[peers][msg.to]){
     
-    if(rp[peers][pid]){
-      room[remotePeers][pid] = rp;
-      return;
+    if(!msg.test){
+      delete msg.route;
+      room[peers][msg.to].give('msg',msg);
     }
+    
+  }else if(rp = room[remotePeers][msg.to]){
+    
+    if(msg.route[rp[rid]]){
+      delete room[remotePeers][msg.to];
+      findOrDelete([msg.to],room);
+    }else rp.give('msg',msg);
+    
   }
   
-  broadcast(room,{
-    type: 'bye',
-    rid: room[rid],
-    pids: [pid]
-  },peer);
+}
+
+function findOrDelete(pids,room,peer){
+  var toDelete = [],
+      keys,i,j,rp,k,pid,msg;
   
-  if(!--room[total]) room[emitter].set('empty');
+  for(k = 0;k < pids.length;k++){
+    pid = pids[k];
+    
+    if(room[peers][pid]) continue;
+    if(room[remotePeers][pid]) continue;
+    
+    keys = Object.keys(room[roomPeers]);
+    for(j = 0;j < keys.length;j++){
+      i = keys[j];
+      rp = room[roomPeers][i];
+      
+      if(rp[peers][pid]){
+        room[remotePeers][pid] = rp;
+        
+        send({
+          test: true,
+          to: pid
+        },room);
+        
+        continue;
+      }
+    }
+    
+    toDelete.push(pid);
+    if(!--room[total]) room[emitter].set('empty');
+  }
+  
+  if(toDelete.length){
+    msg = {
+      type: 'bye',
+      rid: room[rid],
+      pids: toDelete,
+      route: {}
+    };
+    
+    if(peer) msg.route[peer[rid]] = true;
+    broadcast(room,msg);
+  }
+  
 }
 
 // Room listeners
@@ -133,26 +160,39 @@ function roomOnPeer(peer,c,room){
   
   room[roomPeers][id] = peer;
   peer[peers] = {};
+  peer[rid] = id;
   
   peer.on('msg',roomOnPeerMsg,room,id);
   peer.once('closed',roomOncePeerClosed,room,id);
   
+  peer.give('msg',{
+    type: 'rid',
+    rid: room[rid]
+  });
+  
   pids = getPeerList(room);
   if(pids.length) peer.give('msg',{
     type: 'hi',
-    pids: pids
+    pids: pids,
+    rid: room[rid]
   });
 }
 
 function roomOnPeerMsg(msg,c,room,id){
-  var i,pid;
+  var i,pid,pids;
   
   if(typeof msg != 'object') return;
+  if(typeof msg.route != 'object') return;
+  if(msg.route[room[rid]]) return;
   
-  if(msg.from){
-    if(msg.to == 'all') broadcast(room,msg,this);
+  if(msg.to){
+    if(msg.to == 'all') broadcast(room,msg);
     else send(msg,room);
   }else if(msg.rid) switch(msg.type){
+    
+    case 'rid':
+      this[rid] = msg.rid;
+      break;
     
     case 'hi':
       if(!(msg.pids instanceof Array)) return;
@@ -170,12 +210,14 @@ function roomOnPeerMsg(msg,c,room,id){
       }
       
       msg.rid = room[rid];
-      broadcast(room,msg,this);
+      broadcast(room,msg);
       
       break;
     
     case 'bye':
       if(!(msg.pids instanceof Array)) return;
+      
+      pids = [];
       
       for(i = 0;i < msg.pids.length;i++){
         pid = msg.pids[i];
@@ -183,18 +225,21 @@ function roomOnPeerMsg(msg,c,room,id){
         
         if(room[remotePeers][pid] == this){
           delete room[remotePeers][pid];
-          findOrDelete(pid,room,this);
+          pids.push(pid);
         }
       }
       
+      findOrDelete(pids,room,this);
+      
       break;
     
-  }else broadcast(room,msg,this);
+  }else broadcast(room,msg);
   
 }
 
 function roomOncePeerClosed(e,c,room,id){
-  var keys,j,i;
+  var pids = [],
+      keys,j,i;
   
   delete room[roomPeers][id];
   
@@ -203,9 +248,11 @@ function roomOncePeerClosed(e,c,room,id){
     i = keys[j];
     if(room[remotePeers][i] == this){
       delete room[remotePeers][i];
-      findOrDelete(i,room);
+      pids.push(i);
     }
   }
+  
+  findOrDelete(pids,room);
 }
 
 Room.prototype = new Emitter.Target();
@@ -259,7 +306,7 @@ Object.defineProperties(Room.prototype,{
     delete p[rooms][this[rid]];
     delete this[peers][pid];
     
-    findOrDelete(pid,this);
+    findOrDelete([pid],this);
   }},
   
   give: {value: function(type,data){
