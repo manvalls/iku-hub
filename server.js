@@ -10,6 +10,7 @@ var Su = require('u-su'),
     rid = Su(),
     pids = Su(),
     total = Su(),
+    localTotal = Su(),
     ip = Su(),
     rooms = Su(),
     
@@ -25,6 +26,7 @@ function Room(pm){
   
   this[rid] = unique();
   this[total] = 0;
+  this[localTotal] = 0;
   
   this[peers] = {};
   this[remotePeers] = {};
@@ -135,7 +137,7 @@ function findOrDelete(pids,room,pm,peer){
     }
     
     toDelete.push(pid);
-    if(!--room[total]) room[emitter].set('empty');
+    if(!--room[total]) room[emitter].sun('empty','used');
   }
   
   if(toDelete.length){
@@ -204,8 +206,7 @@ function roomOnPeerMsg(msg,c,room,id){
         if(!(room[remotePeers][pid] || room[peers][pid])){
           room[remotePeers][pid] = this;
           
-          if(!room[total]) room[emitter].unset('empty');
-          room[total]++;
+          if(!room[total]++) room[emitter].sun('used','empty');
         }
       }
       
@@ -271,8 +272,8 @@ Object.defineProperties(Room.prototype,{
     p[pids][this[rid]] = pid;
     p[rooms][this[rid]] = this;
     
-    if(!this[total]) this[emitter].unset('empty');
-    this[total]++;
+    if(!this[localTotal]++) this[emitter].sun('locally used','locally empty');
+    if(!this[total]++) this[emitter].sun('used','empty');
     
     peer.give('msg',{
       type: 'hi',
@@ -305,6 +306,8 @@ Object.defineProperties(Room.prototype,{
     delete p[pids][this[rid]];
     delete p[rooms][this[rid]];
     delete this[peers][pid];
+    
+    if(!--this[localTotal]) this[emitter].sun('locally empty','locally used');
     
     findOrDelete([pid],this);
   }},
