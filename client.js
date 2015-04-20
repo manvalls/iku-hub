@@ -77,7 +77,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
         
         peer = room[peers][pid];
         if(!peer){
-          peer = new Peer(this,msg.rid,pid);
+          peer = new Peer(this,msg.rid,pid,'in');
           room[peers][pid] = peer;
           room[emitter].give('peer',peer);
         }
@@ -192,7 +192,7 @@ function Room(server,rid,ps){
   this[id] = rid;
   this[peers] = {};
   
-  for(i = 0;i < ps.length;i++) this[peers][ps[i]] = new Peer(server,rid,ps[i]);
+  for(i = 0;i < ps.length;i++) this[peers][ps[i]] = new Peer(server,rid,ps[i],'out');
   this.until('peer').listeners.change().listen(oncePeerListened,[this]);
   
   plugins.give('room',this);
@@ -248,8 +248,10 @@ Object.defineProperties(Room.prototype,{
 
 // Peer object
 
-function Peer(server,rid,pid){
+function Peer(server,rid,pid,dir){
   Emitter.Target.call(this,emitter);
+  
+  this.direction = dir;
   
   this[srv] = server;
   this[id] = {

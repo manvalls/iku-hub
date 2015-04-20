@@ -323,6 +323,19 @@ Object.defineProperties(Room.prototype,{
   
   send: {value: function(data){
     this.give('msg',data);
+  }},
+  
+  getLocalPeers: {value: function(){
+    var result = [],
+        i,j,keys;
+    
+    keys = Object.keys(this[peers]);
+    for(j = 0;j < keys.length;j++){
+      i = keys[j];
+      result.push(this[peers]);
+    }
+    
+    return result;
   }}
   
 });
