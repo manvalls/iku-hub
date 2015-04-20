@@ -5,8 +5,15 @@ var Su = require('u-su'),
     
     emitter = Su(),
     peers = Su(),
+    room = Su(),
     srv = Su(),
     id = Su(),
+    
+    conn = Su(),
+    candidate = Su(),
+    ping = Su(),
+    queue = Su(),
+    k = Su(),
     
     peerPlugins = new Emitter(),
     serverPlugins = new Emitter(),
@@ -49,6 +56,43 @@ function closeAll(room){
   
 }
 
+function oncePeerClosed(e,c,peer){
+  if(peer[conn] != this) return;
+  if(peer.is('closed')) return;
+  
+  delete peer[conn];
+  peer[emitter].set('closed');
+  
+  new Peer(peer[srv],peer[id].rid,peer[id].pid,peer.direction,peer[room]);
+}
+
+function onPeerMsg(msg,cbc,peer){
+  var pong;
+  
+  if(msg.ping){
+    
+    pong = {pong: msg.ping};
+    
+    if(peer[conn]) peer[conn].give('msg',pong);
+    else{
+      pong.to = peer[id].pid;
+      pong.rid = peer[id].rid;
+      peer[srv].give('msg',pong);
+    }
+    
+  }else if(msg.pong && peer[ping] == msg.pong && peer[candidate].isNot('closed')){
+    
+    delete peer[ping];
+    peer[conn] = peer[candidate];
+    peer[conn].once('closed',oncePeerClosed,peer);
+    delete peer[candidate];
+    
+    while(msg = peer[queue].unshift()) peer[conn].give('msg',msg);
+    
+  }else if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
+  else peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
+}
+
 function onServerMsg(msg,cbc,client,rooms,server){
   var room,peer,i,pid;
   
@@ -59,8 +103,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
     peer = room[peers][msg.from];
     if(!peer) return;
     
-    if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
-    else peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
+    onPeerMsg(msg,cbc,peer);
   }else if(msg.rid) switch(msg.type){
       
     case 'hi':
@@ -76,11 +119,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
         pid = msg.pids[i];
         
         peer = room[peers][pid];
-        if(!peer){
-          peer = new Peer(this,msg.rid,pid,'in');
-          room[peers][pid] = peer;
-          room[emitter].give('peer',peer);
-        }
+        if(!peer) peer = new Peer(this,msg.rid,pid,'in',room);
       }
       
       break;
@@ -192,7 +231,7 @@ function Room(server,rid,ps){
   this[id] = rid;
   this[peers] = {};
   
-  for(i = 0;i < ps.length;i++) this[peers][ps[i]] = new Peer(server,rid,ps[i],'out');
+  for(i = 0;i < ps.length;i++) new Peer(server,rid,ps[i],'out',this);
   this.until('peer').listeners.change().listen(oncePeerListened,[this]);
   
   plugins.give('room',this);
@@ -248,16 +287,23 @@ Object.defineProperties(Room.prototype,{
 
 // Peer object
 
-function Peer(server,rid,pid,dir){
+function Peer(server,rid,pid,dir,rm){
   Emitter.Target.call(this,emitter);
   
   this.direction = dir;
+  
+  this[queue] = [];
+  this[k] = 1;
   
   this[srv] = server;
   this[id] = {
     rid: rid,
     pid: pid
   };
+  
+  this[room] = rm;
+  rm[peers][pid] = this;
+  rm[emitter].give('peer',this);
   
   plugins.give('peer',this);
 }
@@ -269,16 +315,43 @@ Peer.prototype.constructor = Peer;
 
 Object.defineProperties(Peer.prototype,{
   
-  give: {value: function(type,data){
-    type = type.slice(0,127);
+  upgrade: {value: function(peer){
+    var msg = {ping: this[ping] = this[k]++};
     
-    this[srv].give('msg',{
-      to: this[id].pid,
-      rid: this[id].rid,
-      
+    if(this[conn]) this[conn].give('msg',msg);
+    else{
+      msg.to = this[id].pid;
+      msg.rid = this[id].rid;
+      this[srv].give('msg',msg);
+    }
+    
+    this[candidate] = peer;
+    peer.on('msg',onPeerMsg,this);
+  }},
+  
+  give: {value: function(type,data){
+    var msg;
+    
+    type = type.slice(0,127);
+    msg = {
       type: type,
       data: data
-    });
+    };
+    
+    if(this[ping]){
+      this[queue].push(msg);
+      return;
+    }
+    
+    if(this[conn]){
+      this[conn].give('msg',msg);
+      return;
+    }
+    
+    msg.to = this[id].pid;
+    msg.rid = this[id].rid;
+    
+    this[srv].give('msg',msg);
   }},
   
   send: {value: function(data){
