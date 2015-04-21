@@ -14,6 +14,7 @@ var Su = require('u-su'),
     ping = Su(),
     queue = Su(),
     k = Su(),
+    n = Su(),
     
     peerPlugins = new Emitter(),
     serverPlugins = new Emitter(),
@@ -53,6 +54,30 @@ function msgHandler(e){
 Client.peerPlugins.on('msg',msgHandler);
 Client.serverPlugins.on('msg',msgHandler);
 
+Client.peerPlugins.on('ping',function(e){
+  var data = e[0],
+      peer = e[1].target;
+  
+  peer.give('pong',data);
+});
+
+Client.peerPlugins.on('pong',function(e){
+  var data = e[0],
+      peer = e[1].target;
+  
+  if(peer[ping] != data) return;
+  
+  if(peer[candidate].is('ready')){
+    peer[conn] = peer[candidate];
+    peer[conn].once('closed',oncePeerClosed,peer);
+  }
+  
+  delete peer[ping];
+  delete peer[candidate];
+  
+  while(msg = peer[queue].unshift()) peer[conn].give('msg',msg);
+});
+
 // Callbacks
 
 function onceServerReady(e,cbc,client,server){
@@ -72,49 +97,28 @@ function closeAll(room){
 
 function oncePeerClosed(e,c,peer){
   if(peer[conn] != this) return;
-  if(peer.is('closed')) return;
-  
-  delete peer[conn];
-  peer[emitter].set('closed');
-  
-  new Peer(peer[srv],peer[id].rid,peer[id].pid,peer.direction,peer[room]);
+  peer.close();
 }
 
 function onPeerMsg(msg,cbc,peer){
-  var pong;
+  if(msg.n > peer[n]) peer = new Peer(peer[srv],peer[id].rid,peer[id].pid,peer.direction,peer[room],msg.n);
+  if(msg.n != peer[n]) return;
   
-  if(msg.ping){
-    
-    pong = {pong: msg.ping};
-    
-    if(peer[conn]) peer[conn].give('msg',pong);
-    else{
-      pong.to = peer[id].pid;
-      pong.rid = peer[id].rid;
-      peer[srv].give('msg',pong);
-    }
-    
-  }else if(msg.pong && peer[ping] == msg.pong && peer[candidate].isNot('closed')){
-    
-    delete peer[ping];
-    peer[conn] = peer[candidate];
-    peer[conn].once('closed',oncePeerClosed,peer);
-    delete peer[candidate];
-    
-    while(msg = peer[queue].unshift()) peer[conn].give('msg',msg);
-    
-  }else peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
+  peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
 }
 
 function onServerMsg(msg,cbc,client,rooms,server){
   var room,peer,i,pid;
   
   if(msg.from){
+    lastMSG = msg;
+    
     room = rooms[msg.rid];
     if(!room) return;
     
     peer = room[peers][msg.from];
     if(!peer) return;
+    if(msg.to == 'all') msg.n = peer[n];
     
     onPeerMsg(msg,cbc,peer);
   }else if(msg.rid) switch(msg.type){
@@ -132,7 +136,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
         pid = msg.pids[i];
         
         peer = room[peers][pid];
-        if(!peer) peer = new Peer(this,msg.rid,pid,'in',room);
+        if(!peer) new Peer(this,msg.rid,pid,'in',room);
       }
       
       break;
@@ -297,13 +301,14 @@ Object.defineProperties(Room.prototype,{
 
 // Peer object
 
-function Peer(server,rid,pid,dir,rm){
+function Peer(server,rid,pid,dir,rm,nv){
   Emitter.Target.call(this,emitter);
   
   this.direction = dir;
   
   this[queue] = [];
   this[k] = 1;
+  this[n] = nv || 0;
   
   this[srv] = server;
   this[id] = {
@@ -314,6 +319,8 @@ function Peer(server,rid,pid,dir,rm){
   this[room] = rm;
   rm[peers][pid] = this;
   
+  this.once('closed',cleanup);
+  
   plugins.give('peer',this);
   rm[emitter].give('peer',this);
 }
@@ -323,20 +330,22 @@ Client.Peer = Peer;
 Peer.prototype = new Emitter.Target();
 Peer.prototype.constructor = Peer;
 
+function cleanup(){
+  
+  if(this[conn]){
+    this[conn].set('closed');
+    delete this[conn];
+  }
+  
+}
+
 Object.defineProperties(Peer.prototype,{
   
   upgrade: {value: function(peer){
-    var msg = {ping: this[ping] = this[k]++};
-    
-    if(this[conn]) this[conn].give('msg',msg);
-    else{
-      msg.to = this[id].pid;
-      msg.rid = this[id].rid;
-      this[srv].give('msg',msg);
-    }
-    
     this[candidate] = peer;
     peer.on('msg',onPeerMsg,this);
+    
+    this.give('ping',this[ping] = this[k]++);
   }},
   
   give: {value: function(type,data){
@@ -345,10 +354,11 @@ Object.defineProperties(Peer.prototype,{
     type = type.slice(0,127);
     msg = {
       type: type,
-      data: data
+      data: data,
+      n: this[n]
     };
     
-    if(this[ping]){
+    if(this[ping] && type != 'ping' && type != 'pong'){
       this[queue].push(msg);
       return;
     }
@@ -368,7 +378,22 @@ Object.defineProperties(Peer.prototype,{
     this.give('msg',data);
   }},
   
-  set: {value: function(){}}
+  close: {value: function(){
+    var peer;
+    
+    if(this.is('closed')) return;
+    
+    this[emitter].set('closed');
+    if(this[room].isNot('closed')){
+      peer = new Peer(this[srv],this[id].rid,this[id].pid,this.direction,this[room],this[n] + 1);
+      peer.give('ping');
+    }
+    
+  }},
+  
+  set: {value: function(event){
+    if(event == 'closed') this.close();
+  }}
   
 });
 
