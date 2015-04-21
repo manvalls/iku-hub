@@ -37,9 +37,23 @@ Client = module.exports = function Client(server){
   plugins.give('client',this);
 };
 
+// Plugins
+
 Client.plugins = plugins.target;
 Client.peerPlugins = peerPlugins.target;
 Client.serverPlugins = serverPlugins.target;
+
+function msgHandler(e){
+  var data = e[0],
+      emitter = e[1];
+  
+  emitter.give('msg',data);
+}
+
+Client.peerPlugins.on('msg',msgHandler);
+Client.serverPlugins.on('msg',msgHandler);
+
+// Callbacks
 
 function onceServerReady(e,cbc,client,server){
   client[emitter].set('server',server);
@@ -89,8 +103,7 @@ function onPeerMsg(msg,cbc,peer){
     
     while(msg = peer[queue].unshift()) peer[conn].give('msg',msg);
     
-  }else if(msg.type == 'msg') peer[emitter].give('msg',msg.data);
-  else peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
+  }else peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
 }
 
 function onServerMsg(msg,cbc,client,rooms,server){
@@ -149,10 +162,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
       
       break;
     
-  }else{
-    if(msg.type == 'msg') server[emitter].give('msg',msg.data);
-    else serverPlugins.give(msg.type,[msg.data,serverPlugins]);
-  }
+  }else serverPlugins.give(msg.type,[msg.data,serverPlugins]);
   
 }
 
@@ -303,9 +313,9 @@ function Peer(server,rid,pid,dir,rm){
   
   this[room] = rm;
   rm[peers][pid] = this;
-  rm[emitter].give('peer',this);
   
   plugins.give('peer',this);
+  rm[emitter].give('peer',this);
 }
 
 Client.Peer = Peer;
@@ -356,11 +366,13 @@ Object.defineProperties(Peer.prototype,{
   
   send: {value: function(data){
     this.give('msg',data);
-  }}
+  }},
+  
+  set: {value: function(){}}
   
 });
 
-// Plugins
+// External plugins
 
 rtc = require('./client/rtc.js');
 if(rtc.Pc) require('./client/rtc-stream.js');

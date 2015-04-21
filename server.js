@@ -376,6 +376,10 @@ Object.defineProperties(Peer.prototype,{
   
   close: {value: function(){
     this[ip].set('closed');
+  }},
+  
+  set: {value: function(event){
+    if(event == 'closed') this.close();
   }}
   
 });
@@ -391,9 +395,6 @@ Server = module.exports = function Server(peerMachine){
 
 Server.Peer = Peer;
 Server.Room = Room;
-
-Server.serverPlugins = serverPlugins.target;
-Server.plugins = plugins.target;
 
 Server.prototype = new Emitter.Target();
 Server.prototype.constructor = Server;
@@ -420,8 +421,7 @@ function onMsg(msg,cbc,ep){
     
     if(msg.to == 'all') return broadcast(room,msg,msg.from);
     send(msg,room);
-  }else if(msg.type == 'msg') ep[emitter].give('msg',msg.data);
-  else serverPlugins.give(msg.type,[msg.data,ep[emitter]]);
+  }else serverPlugins.give(msg.type,[msg.data,ep[emitter]]);
   
 }
 
@@ -429,4 +429,17 @@ function onceClosed(e,cbc,ep){
   ep[emitter].set('closed');
 }
 
+// Plugins
+
+Server.serverPlugins = serverPlugins.target;
+Server.plugins = plugins.target;
+
+function msgHandler(e){
+  var data = e[0],
+      emitter = e[1];
+  
+  emitter.give('msg',data);
+}
+
+Server.serverPlugins.on('msg',msgHandler);
 
