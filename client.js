@@ -1,5 +1,6 @@
 var Su = require('u-su'),
     Emitter = require('y-emitter'),
+    Resolver = require('y-resolver'),
     
     rtc,
     
@@ -15,6 +16,9 @@ var Su = require('u-su'),
     queue = Su(),
     k = Su(),
     n = Su(),
+    
+    petitions = Su(),
+    ngid = Su(),
     
     peerPlugins = new Emitter(),
     serverPlugins = new Emitter(),
@@ -65,6 +69,7 @@ Client.peerPlugins.on('pong',function(e){
   var data = e[0],
       peer = e[1].target;
   
+  if(!peer[ping]) return;
   if(peer[ping] != data) return;
   
   if(peer[candidate].is('ready')){
@@ -103,6 +108,7 @@ function oncePeerClosed(e,c,peer){
 }
 
 function onPeerMsg(msg,cbc,peer){
+  
   if(msg.n > peer[n]){
     peer[emitter].sun('closed','ready');
     peer = new Peer(peer[srv],peer[id].rid,peer[id].pid,peer.direction,peer[room],msg.n);
@@ -111,12 +117,32 @@ function onPeerMsg(msg,cbc,peer){
   if(msg.n != peer[n]) return;
   
   peerPlugins.give(msg.type,[msg.data,peer[emitter],peer[room][emitter]]);
+  
 }
 
 function onServerMsg(msg,cbc,client,rooms,server){
-  var room,peer,i,pid;
+  var room,peer,i,pid,res;
+  
+  if(!msg.rid) return serverPlugins.give(msg.type,[msg.data,server[emitter]]);
+  
+  if(msg.gid){
+    
+    room = rooms[msg.rid];
+    if(!room) return;
+    
+    peer = room[peers][msg.pid];
+    if(!peer) return;
+    
+    res = peer[petitions][msg.gid];
+    if(!res) return;
+    
+    res.accept(msg.data);
+    
+    return;
+  }
   
   if(msg.from){
+    
     room = rooms[msg.rid];
     if(!room) return;
     
@@ -125,7 +151,11 @@ function onServerMsg(msg,cbc,client,rooms,server){
     if(msg.to == 'all') msg.n = peer[n];
     
     onPeerMsg(msg,cbc,peer);
-  }else if(msg.rid) switch(msg.type){
+    
+    return;
+  }
+  
+  switch(msg.type){
       
     case 'hi':
       room = rooms[msg.rid];
@@ -170,7 +200,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
       
       break;
     
-  }else serverPlugins.give(msg.type,[msg.data,server[emitter]]);
+  }
   
 }
 
@@ -314,8 +344,11 @@ function Peer(server,rid,pid,dir,rm,nv){
   this.direction = dir;
   
   this[queue] = [];
-  this[k] = 1;
+  this[k] = 0;
   this[n] = nv || 0;
+  
+  this[petitions] = {};
+  this[ngid] = 0;
   
   this[srv] = server;
   this[id] = {
@@ -330,6 +363,7 @@ function Peer(server,rid,pid,dir,rm,nv){
   
   plugins.give('peer',this);
   rm[emitter].give('peer',this);
+  
 }
 
 Client.Peer = Peer;
@@ -350,10 +384,29 @@ function onceUpPeerReady(e,c,peer){
   peer[candidate] = this;
   this.on('msg',onPeerMsg,peer);
   
-  peer.give('ping',peer[ping] = peer[k]++);
+  peer.give('ping',peer[ping] = peer[k] = (peer[k] + 1)%1e15);
 }
 
 Object.defineProperties(Peer.prototype,{
+  
+  get: {value: function(type,data){
+    var msg = {
+      type: type,
+      data: data,
+      rid: this[id].rid,
+      pid: this[id].pid,
+      gid: this[ngid] = (this[ngid] + 1)%1e15
+    };
+    
+    this[srv].give('msg',msg);
+    this[petitions][msg.gid] = new Resolver();
+    
+    return this[petitions][msg.gid].yielded;
+  }},
+  
+  request: {value: function(data){
+    return this.get('info',data);
+  }},
   
   upgrade: {value: function(peer){
     peer.once('ready',onceUpPeerReady);
