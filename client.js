@@ -81,6 +81,8 @@ Client.peerPlugins.on('pong',function(e){
 // Callbacks
 
 function onceServerReady(e,cbc,client,server){
+  server[emitter].set('ready');
+  client[emitter].set('ready');
   client[emitter].set('server',server);
 }
 
@@ -90,7 +92,7 @@ function closeAll(room){
   
   for(j = 0;j < keys.length;j++){
     i = keys[j];
-    room[peers][i][emitter].set('closed');
+    room[peers][i][emitter].sun('closed','ready');
   }
   
 }
@@ -101,18 +103,20 @@ function oncePeerClosed(e,c,peer){
 }
 
 function onPeerMsg(msg,cbc,peer){
-  if(msg.n > peer[n]) peer = new Peer(peer[srv],peer[id].rid,peer[id].pid,peer.direction,peer[room],msg.n);
+  if(msg.n > peer[n]){
+    peer[emitter].sun('closed','ready');
+    peer = new Peer(peer[srv],peer[id].rid,peer[id].pid,peer.direction,peer[room],msg.n);
+  }
+  
   if(msg.n != peer[n]) return;
   
-  peerPlugins.give(msg.type,[msg.data,peer[emitter]]);
+  peerPlugins.give(msg.type,[msg.data,peer[emitter],peer[room][emitter]]);
 }
 
 function onServerMsg(msg,cbc,client,rooms,server){
   var room,peer,i,pid;
   
   if(msg.from){
-    lastMSG = msg;
-    
     room = rooms[msg.rid];
     if(!room) return;
     
@@ -150,7 +154,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
         delete rooms[msg.rid];
         
         closeAll(room);
-        room[emitter].set('closed');
+        room[emitter].sun('closed','ready');
         return;
       }
       
@@ -161,12 +165,12 @@ function onServerMsg(msg,cbc,client,rooms,server){
         if(!peer) return;
         
         delete room[peers][pid];
-        peer[emitter].set('closed');
+        peer[emitter].sun('closed','ready');
       }
       
       break;
     
-  }else serverPlugins.give(msg.type,[msg.data,serverPlugins]);
+  }else serverPlugins.give(msg.type,[msg.data,server[emitter]]);
   
 }
 
@@ -182,12 +186,12 @@ function onceServerClosed(e,cbc,client,rooms,server){
   
   for(i = 0;i < rs.length;i++){
     closeAll(rs[i]);
-    rs[i][emitter].set('closed');
+    rs[i][emitter].sun('closed','ready');
   }
   
   client[emitter].unset('server');
-  server[emitter].set('closed');
-  client[emitter].set('closed');
+  server[emitter].sun('closed','ready');
+  client[emitter].sun('closed','ready');
 }
 
 Client.prototype = new Emitter.Target();
@@ -240,6 +244,7 @@ function Room(server,rid,ps){
   var i;
   
   Emitter.Target.call(this,emitter);
+  this[emitter].set('ready');
   
   this[srv] = server;
   this[id] = rid;
@@ -302,7 +307,9 @@ Object.defineProperties(Room.prototype,{
 // Peer object
 
 function Peer(server,rid,pid,dir,rm,nv){
+  
   Emitter.Target.call(this,emitter);
+  this[emitter].set('ready');
   
   this.direction = dir;
   
@@ -339,13 +346,17 @@ function cleanup(){
   
 }
 
+function onceUpPeerReady(e,c,peer){
+  peer[candidate] = this;
+  this.on('msg',onPeerMsg,peer);
+  
+  peer.give('ping',peer[ping] = peer[k]++);
+}
+
 Object.defineProperties(Peer.prototype,{
   
   upgrade: {value: function(peer){
-    this[candidate] = peer;
-    peer.on('msg',onPeerMsg,this);
-    
-    this.give('ping',this[ping] = this[k]++);
+    peer.once('ready',onceUpPeerReady);
   }},
   
   give: {value: function(type,data){
@@ -383,7 +394,7 @@ Object.defineProperties(Peer.prototype,{
     
     if(this.is('closed')) return;
     
-    this[emitter].set('closed');
+    this[emitter].sun('closed','ready');
     if(this[room].isNot('closed')){
       peer = new Peer(this[srv],this[id].rid,this[id].pid,this.direction,this[room],this[n] + 1);
       peer.give('ping');
