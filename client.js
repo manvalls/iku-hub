@@ -7,6 +7,7 @@ var Su = require('u-su'),
     emitter = Su(),
     peers = Su(),
     room = Su(),
+    hub = Su(),
     srv = Su(),
     id = Su(),
     
@@ -160,7 +161,7 @@ function onServerMsg(msg,cbc,client,rooms,server){
     case 'hi':
       room = rooms[msg.rid];
       if(!room){
-        room = new Room(this,msg.rid,msg.pids);
+        room = new Room(this,msg.rid,msg.pids,client);
         rooms[msg.rid] = room;
         client[emitter].give('room',room);
         return;
@@ -270,12 +271,13 @@ Object.defineProperties(Server.prototype,{
 
 // Room object
 
-function Room(server,rid,ps){
+function Room(server,rid,ps,client){
   var i;
   
   Emitter.Target.call(this,emitter);
   this[emitter].set('ready');
   
+  this[hub] = client;
   this[srv] = server;
   this[id] = rid;
   this[peers] = {};
@@ -302,6 +304,8 @@ Room.prototype = new Emitter.Target();
 Room.prototype.constructor = Room;
 
 Object.defineProperties(Room.prototype,{
+  
+  hub: {get: function(){ return this[hub]; }},
   
   give: {value: function(type,data){
     type = type.slice(0,127);
@@ -388,6 +392,8 @@ function onceUpPeerReady(e,c,peer){
 }
 
 Object.defineProperties(Peer.prototype,{
+  
+  room: {get: function(){ return this[room]; }},
   
   get: {value: function(type,data){
     var msg = {
