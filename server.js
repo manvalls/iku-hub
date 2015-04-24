@@ -12,6 +12,7 @@ var Su = require('u-su'),
     total = Su(),
     localTotal = Su(),
     ip = Su(),
+    cw = Su(),
     rooms = Su(),
     
     room = Su(),
@@ -23,6 +24,7 @@ var Su = require('u-su'),
     serverPlugins = new Emitter(),
     getPlugins = new Emitter(),
     roomGetPlugins = new Emitter(),
+    coworkerPlugins = new Emitter(),
     
     Server;
 
@@ -217,7 +219,7 @@ Object.defineProperties(Request.prototype,{
 // Room listeners
 
 function roomOnPeer(peer,c,room){
-  var id = Su(),
+  var id = unique(),
       pids;
   
   room[roomPeers][id] = peer;
@@ -238,6 +240,8 @@ function roomOnPeer(peer,c,room){
     pids: pids
   });
   
+  room[emitter].give('coworker',new Coworker(peer));
+  
 }
 
 function roomOnPeerMsg(msg,c,room,id){
@@ -255,6 +259,11 @@ function roomOnPeerMsg(msg,c,room,id){
   
   if(msg.gid){
     handleGet(msg,room);
+    return;
+  }
+  
+  if(!(msg.pids || msg.rid)){
+    coworkerPlugins.give(msg.type,[msg.data,this[cw][emitter]]);
     return;
   }
   
@@ -416,7 +425,20 @@ Object.defineProperties(Room.prototype,{
     keys = Object.keys(this[peers]);
     for(j = 0;j < keys.length;j++){
       i = keys[j];
-      result.push(this[peers]);
+      result.push(this[peers][i]);
+    }
+    
+    return result;
+  }},
+  
+  getCoworkers: {value: function(){
+    var result = [],
+        i,j,keys;
+    
+    keys = Object.keys(this[roomPeers]);
+    for(j = 0;j < keys.length;j++){
+      i = keys[j];
+      result.push(this[roomPeers][i][cw]);
     }
     
     return result;
@@ -427,6 +449,35 @@ Object.defineProperties(Room.prototype,{
 function room_onceClosed(e,cbc,room,p){
   room.remove(p);
 }
+
+// Coworker object
+
+function Coworker(peer){
+  Emitter.Target.call(this,emitter);
+  
+  this[ip] = peer;
+  peer[cw] = this;
+}
+
+Coworker.prototype = new Emitter.Target();
+Coworker.prototype.constructor = Room;
+
+Object.defineProperties(Coworker.prototype,{
+  
+  give: {value: function(type,data){
+    
+    this[ip].give('msg',{
+      type: type,
+      data: data
+    });
+    
+  }},
+  
+  send: {value: function(data){
+    this.give('msg',data);
+  }}
+  
+});
 
 // External Peer object
 
@@ -529,16 +580,20 @@ function onceClosed(e,cbc,ep){
 // Plugins
 
 Server.serverPlugins = serverPlugins.target;
+Server.coworkerPlugins = coworkerPlugins.target;
 Server.roomGetPlugins = roomGetPlugins.target;
 Server.getPlugins = getPlugins.target;
 Server.plugins = plugins.target;
 
-Server.serverPlugins.on('msg',function(e){
+function msgHandler(e){
   var data = e[0],
       emitter = e[1];
   
   emitter.give('msg',data);
-});
+}
+
+Server.coworkerPlugins.on('msg',msgHandler);
+Server.serverPlugins.on('msg',msgHandler);
 
 function reqHandler(e){
   var data = e[0],

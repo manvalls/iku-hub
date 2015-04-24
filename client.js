@@ -18,6 +18,9 @@ var Su = require('u-su'),
     k = Su(),
     n = Su(),
     
+    total = Su(),
+    upgraded = Su(),
+    
     petitions = Su(),
     ngid = Su(),
     
@@ -74,6 +77,7 @@ Client.peerPlugins.on('pong',function(e){
   if(peer[ping] != data) return;
   
   if(peer[candidate].is('ready')){
+    peer[room][upgraded]++;
     peer[conn] = peer[candidate];
     peer[conn].once('closed',oncePeerClosed,peer);
   }
@@ -105,6 +109,7 @@ function closeAll(room){
 
 function oncePeerClosed(e,c,peer){
   if(peer[conn] != this) return;
+  peer[room][upgraded]--;
   peer.close();
 }
 
@@ -282,6 +287,9 @@ function Room(server,rid,ps,client){
   this[petitions] = {};
   this[ngid] = 0;
   
+  this[total] = 0;
+  this[upgraded] = 0;
+  
   this[hub] = client;
   this[srv] = server;
   this[id] = rid;
@@ -331,8 +339,21 @@ Object.defineProperties(Room.prototype,{
   }},
   
   give: {value: function(type,data){
-    type = type.slice(0,127);
+    var i,j,keys;
     
+    if(!this[total]) return;
+    
+    if(this[total] == this[upgraded]){
+      
+      keys = Object.keys(this[peers]);
+      for(j = 0;j < keys.length;j++){
+        i = keys[j];
+        this[peers][i].give(type,data);
+      }
+      
+    }
+    
+    type = type.slice(0,127);
     this[srv].give('msg',{
       to: 'all',
       rid: this[id],
@@ -340,6 +361,7 @@ Object.defineProperties(Room.prototype,{
       type: type,
       data: data
     });
+    
   }},
   
   send: {value: function(data){
@@ -353,7 +375,7 @@ Object.defineProperties(Room.prototype,{
     keys = Object.keys(this[peers]);
     for(j = 0;j < keys.length;j++){
       i = keys[j];
-      result.push(this[peers]);
+      result.push(this[peers][i]);
     }
     
     return result;
@@ -383,6 +405,7 @@ function Peer(server,rid,pid,dir,rm,nv){
     pid: pid
   };
   
+  rm[total]++;
   this[room] = rm;
   rm[peers][pid] = this;
   
