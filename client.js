@@ -131,8 +131,10 @@ function onServerMsg(msg,cbc,client,rooms,server){
     room = rooms[msg.rid];
     if(!room) return;
     
-    peer = room[peers][msg.pid];
-    if(!peer) return;
+    if(msg.pid){
+      peer = room[peers][msg.pid];
+      if(!peer) return;
+    }else peer = room;
     
     res = peer[petitions][msg.gid];
     if(!res) return;
@@ -277,6 +279,9 @@ function Room(server,rid,ps,client){
   Emitter.Target.call(this,emitter);
   this[emitter].set('ready');
   
+  this[petitions] = {};
+  this[ngid] = 0;
+  
   this[hub] = client;
   this[srv] = server;
   this[id] = rid;
@@ -306,6 +311,24 @@ Room.prototype.constructor = Room;
 Object.defineProperties(Room.prototype,{
   
   hub: {get: function(){ return this[hub]; }},
+  
+  get: {value: function(type,data){
+    var msg = {
+      type: type,
+      data: data,
+      rid: this[id],
+      gid: this[ngid] = (this[ngid] + 1)%1e15
+    };
+    
+    this[srv].give('msg',msg);
+    this[petitions][msg.gid] = new Resolver();
+    
+    return this[petitions][msg.gid].yielded;
+  }},
+  
+  request: {value: function(data){
+    return this.get('info',data);
+  }},
   
   give: {value: function(type,data){
     type = type.slice(0,127);

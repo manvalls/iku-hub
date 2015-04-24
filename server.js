@@ -22,6 +22,7 @@ var Su = require('u-su'),
     plugins = new Emitter(),
     serverPlugins = new Emitter(),
     getPlugins = new Emitter(),
+    roomGetPlugins = new Emitter(),
     
     Server;
 
@@ -122,6 +123,12 @@ function handleGet(msg,room){
   
   if(checkRoute(msg,room)) return;
   
+  if(!msg.pid){
+    req = new Request(msg.from,msg.gid,msg.pid,room,msg.data);
+    roomGetPlugins.give(msg.type,[req,room[emitter]]);
+    return;
+  }
+  
   if(room[peers][msg.pid]){
     req = new Request(msg.from,msg.gid,msg.pid,room,msg.data);
     getPlugins.give(msg.type,[req,room[peers][msg.pid][emitter]]);
@@ -187,14 +194,14 @@ function Request(_to,_gid,_pid,_room,data){
 Object.defineProperties(Request.prototype,{
   
   answer: {value: function(data){
-    
-    send({
+    var msg = {
       to: this[to],
-      pid: this[pid],
       gid: this[gid],
       data: data
-    },this[room]);
+    };
     
+    if(this[pid]) msg.pid = this[pid];
+    send(msg,this[room]);
   }},
   
   toString: {value: function(){
@@ -522,6 +529,7 @@ function onceClosed(e,cbc,ep){
 // Plugins
 
 Server.serverPlugins = serverPlugins.target;
+Server.roomGetPlugins = roomGetPlugins.target;
 Server.getPlugins = getPlugins.target;
 Server.plugins = plugins.target;
 
@@ -532,10 +540,13 @@ Server.serverPlugins.on('msg',function(e){
   emitter.give('msg',data);
 });
 
-Server.getPlugins.on('info',function(e){
+function reqHandler(e){
   var data = e[0],
       emitter = e[1];
   
   emitter.give('request',data);
-});
+}
+
+Server.getPlugins.on('info',reqHandler);
+Server.roomGetPlugins.on('info',reqHandler);
 
