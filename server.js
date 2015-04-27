@@ -21,7 +21,7 @@ var Su = require('u-su'),
     to = Su(),
     
     plugins = new Emitter(),
-    serverPlugins = new Emitter(),
+    clientPlugins = new Emitter(),
     getPlugins = new Emitter(),
     roomGetPlugins = new Emitter(),
     coworkerPlugins = new Emitter(),
@@ -528,8 +528,9 @@ Server = module.exports = function Server(peerMachine){
   plugins.give('server',this);
 };
 
-Server.Peer = Peer;
+Server.Client = Peer;
 Server.Room = Room;
+Server.Coworker = Coworker;
 
 Server.prototype = new Emitter.Target();
 Server.prototype.constructor = Server;
@@ -569,7 +570,7 @@ function onMsg(msg,cbc,ep){
     return;
   }
   
-  serverPlugins.give(msg.type,[msg.data,ep[emitter]]);
+  clientPlugins.give(msg.type,[msg.data,ep[emitter]]);
   
 }
 
@@ -579,7 +580,7 @@ function onceClosed(e,cbc,ep){
 
 // Plugins
 
-Server.serverPlugins = serverPlugins.target;
+Server.clientPlugins = clientPlugins.target;
 Server.coworkerPlugins = coworkerPlugins.target;
 Server.roomGetPlugins = roomGetPlugins.target;
 Server.getPlugins = getPlugins.target;
@@ -593,7 +594,7 @@ function msgHandler(e){
 }
 
 Server.coworkerPlugins.on('msg',msgHandler);
-Server.serverPlugins.on('msg',msgHandler);
+Server.clientPlugins.on('msg',msgHandler);
 
 function reqHandler(e){
   var data = e[0],

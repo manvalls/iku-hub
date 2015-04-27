@@ -2,8 +2,6 @@ var Su = require('u-su'),
     Emitter = require('y-emitter'),
     Resolver = require('y-resolver'),
     
-    rtc,
-    
     emitter = Su(),
     peers = Su(),
     room = Su(),
@@ -251,6 +249,8 @@ function Server(server){
   
   plugins.give('server',this);
 }
+
+Client.Server = Server;
 
 Server.prototype = new Emitter.Target();
 Server.prototype.constructor = Server;
@@ -515,5 +515,7 @@ Object.defineProperties(Peer.prototype,{
 
 // External plugins
 
-rtc = require('./client/rtc.js');
-if(rtc.Pc) require('./client/rtc-stream.js');
+(function(){
+  var rtc = require('./plugins/rtc/poly.js');
+  if(rtc.Pc) require('./plugins/rtc.js');
+})();

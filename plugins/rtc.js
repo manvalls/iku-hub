@@ -6,7 +6,7 @@ var Su = require('u-su'),
     until = require('u-proto/until'),
     
     Client = require('../client.js'),
-    rtc = require('./rtc.js'),
+    rtc = require('./rtc/poly.js'),
     
     event = '3M9E3T-F9qsz',
     
