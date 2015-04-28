@@ -517,5 +517,7 @@ Object.defineProperties(Peer.prototype,{
 
 (function(){
   var rtc = require('./plugins/rtc/poly.js');
+  
   if(rtc.Pc) require('./plugins/rtc.js');
+  require('./plugins/events.js');
 })();

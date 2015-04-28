@@ -606,3 +606,8 @@ function reqHandler(e){
 Server.getPlugins.on('info',reqHandler);
 Server.roomGetPlugins.on('info',reqHandler);
 
+// External plugins
+
+(function(){
+  require('./plugins/events.js');
+})();

@@ -1,5 +1,5 @@
 var Client = require('../client.js'),
-    Server = require('../main.js'),
+    Server = require('../server.js'),
     
     Su = require('u-su'),
     Emitter = require('y-emitter'),
@@ -26,7 +26,7 @@ function pluginListener(e){
   em = e1[emitter];
   if(!em) return;
   
-  if(em[method]) em[method].apply(em,data.args);
+  if(em[data.method]) em[data.method].apply(em,data.args);
 }
 
 function onAnyEvent(args,c,peer,method,pref){
