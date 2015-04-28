@@ -379,6 +379,14 @@ Object.defineProperties(Room.prototype,{
     }
     
     return result;
+  }},
+  
+  total: {get: function(){
+    return this[total];
+  }},
+  
+  upgraded: {get: function(){
+    return this[upgraded];
   }}
   
 });
