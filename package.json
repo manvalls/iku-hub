@@ -10,7 +10,8 @@
     "y-emitter": "",
     "y-walk": "",
     "y-callback": "",
-    "y-resolver": ""
+    "y-resolver": "",
+    "i-peer": ""
   },
   "repository": {
     "type": "git",

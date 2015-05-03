@@ -42,6 +42,7 @@ function onceClosed(e,c,pc){
 function onStream(e,c,emitter){
   var label;
   
+  emitter.syn('ST ','stream');
   if(this[labels] && (label = this[labels][e.stream.id])) emitter.give('ST ' + label,e.stream);
   else emitter.give('stream',e.stream);
   
@@ -50,6 +51,7 @@ function onStream(e,c,emitter){
 function onDC(e,c,emitter){
   var label;
   
+  emitter.syn('DC ','datachannel');
   if(e.channel.label) emitter.give('DC ' + e.channel.label,e.channel);
   else emitter.give('datachannel',e.stream);
   

@@ -168,7 +168,6 @@ function onServerMsg(msg,cbc,client,rooms,server){
       if(!room){
         room = new Room(this,msg.rid,msg.pids,client);
         rooms[msg.rid] = room;
-        client[emitter].give('room',room);
         return;
       }
       
@@ -295,23 +294,13 @@ function Room(server,rid,ps,client){
   this[id] = rid;
   this[peers] = {};
   
-  for(i = 0;i < ps.length;i++) new Peer(server,rid,ps[i],'out',this);
-  this.until('peer').listeners.change().listen(oncePeerListened,[this]);
-  
   plugins.give('room',this);
+  
+  client[emitter].give('room',this);
+  for(i = 0;i < ps.length;i++) new Peer(server,rid,ps[i],'out',this);
 }
 
 Client.Room = Room;
-
-function oncePeerListened(room){
-  var keys,i,j;
-  
-  keys = Object.keys(room[peers]);
-  for(j = 0;j < keys.length;j++){
-    i = keys[j];
-    room[emitter].give('peer',room[peers][i]);
-  }
-}
 
 Room.prototype = new Emitter.Target();
 Room.prototype.constructor = Room;
@@ -351,6 +340,7 @@ Object.defineProperties(Room.prototype,{
         this[peers][i].give(type,data);
       }
       
+      return;
     }
     
     type = type.slice(0,127);
@@ -469,7 +459,7 @@ Object.defineProperties(Peer.prototype,{
   }},
   
   upgrade: {value: function(peer){
-    peer.once('ready',onceUpPeerReady);
+    peer.once('ready',onceUpPeerReady,this);
   }},
   
   give: {value: function(type,data){
@@ -527,5 +517,8 @@ Object.defineProperties(Peer.prototype,{
   var rtc = require('./plugins/rtc/poly.js');
   
   if(rtc.Pc) require('./plugins/rtc.js');
+  require('./plugins/rtc-upgrade.js');
+  
   require('./plugins/events.js');
 })();
+
