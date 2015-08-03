@@ -7,7 +7,7 @@
     "u-su": "",
     "u-rand": "",
     "u-proto": "",
-    "y-emitter": "",
+    "y-emitter": "^6",
     "y-walk": "",
     "y-callback": "",
     "y-resolver": "",
