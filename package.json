@@ -6,7 +6,7 @@
   "dependencies": {
     "u-su": "",
     "u-rand": "",
-    "u-proto": "",
+    "u-proto": "^3",
     "y-emitter": "^6",
     "y-walk": "",
     "y-callback": "",
