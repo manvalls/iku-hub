@@ -11,7 +11,7 @@
     "y-walk": "",
     "y-callback": "",
     "y-resolver": "",
-    "i-peer": ""
+    "i-peer": "^2"
   },
   "repository": {
     "type": "git",
